@@ -54,6 +54,8 @@ function WalletDashboard({
   const [classicDestMuxedId, setClassicDestMuxedId] = useState('');
   const [sending, setSending] = useState(false);
   const [classicSending, setClassicSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [classicSendError, setClassicSendError] = useState('');
   const [useGasless, setUseGasless] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('gasless');
@@ -96,6 +98,8 @@ function WalletDashboard({
     setDestination('');
     setAmount('');
     setSending(false);
+    setSendError('');
+    setClassicSendError('');
     setCopied('');
     setRefreshing(false);
     setRefreshed(false);
@@ -111,6 +115,13 @@ function WalletDashboard({
   const shortenAddress = (address) => {
     if (!address || address.length < 12) return address;
     return `${address.substring(0, 6)}....${address.substring(address.length - 6)}`;
+  };
+
+  const isValidStellarAddress = (address) => {
+    if (!address) return false;
+    // G = classic account, C = contract, M = muxed account
+    if (!address.match(/^[GCM][A-Z0-9]{55}$/)) return false;
+    return true;
   };
 
   const getClassicReceiveAddress = () => {
@@ -180,6 +191,26 @@ function WalletDashboard({
 
   const handleSend = async (e) => {
     e.preventDefault();
+    setSendError('');
+
+    // Validate destination address
+    if (!isValidStellarAddress(destination)) {
+      setSendError('Invalid destination address. Must be a valid G, C, or M address.');
+      return;
+    }
+
+    // Validate amount
+    const amountNum = parseFloat(amount);
+    const balanceNum = parseFloat(balance);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setSendError('Invalid amount. Must be greater than 0.');
+      return;
+    }
+    if (amountNum > balanceNum) {
+      setSendError(`Insufficient balance. Available: ${balance} XLM`);
+      return;
+    }
+
     setSending(true);
     try {
       const finalDest = getMuxedDestination(destination, destMuxedId);
@@ -192,7 +223,7 @@ function WalletDashboard({
       // Refresh balances after successful send
       onRefreshBalances();
     } catch (error) {
-      // Error already handled in parent
+      setSendError(error.message || 'Failed to send transaction');
     } finally {
       setSending(false);
     }
@@ -200,6 +231,26 @@ function WalletDashboard({
 
   const handleClassicSend = async (e) => {
     e.preventDefault();
+    setClassicSendError('');
+
+    // Validate destination address
+    if (!isValidStellarAddress(classicDestination)) {
+      setClassicSendError('Invalid destination address. Must be a valid G, C, or M address.');
+      return;
+    }
+
+    // Validate amount
+    const amountNum = parseFloat(classicAmount);
+    const balanceNum = parseFloat(classicBalance);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setClassicSendError('Invalid amount. Must be greater than 0.');
+      return;
+    }
+    if (amountNum > balanceNum) {
+      setClassicSendError(`Insufficient balance. Available: ${classicBalance} XLM`);
+      return;
+    }
+
     setClassicSending(true);
     try {
       const finalDest = getMuxedDestination(classicDestination, classicDestMuxedId);
@@ -212,7 +263,7 @@ function WalletDashboard({
       // Refresh balances after successful send
       onRefreshBalances();
     } catch (error) {
-      // Error already handled in parent
+      setClassicSendError(error.message || 'Failed to send transaction');
     } finally {
       setClassicSending(false);
     }
@@ -525,7 +576,7 @@ function WalletDashboard({
                   type="text"
                   id="classicDestination"
                   value={classicDestination}
-                  onChange={(e) => setClassicDestination(e.target.value)}
+                  onChange={(e) => { setClassicDestination(e.target.value); setClassicSendError(''); }}
                   placeholder="GXXX... or CXXX..."
                   required
                   disabled={classicSending}
@@ -550,7 +601,7 @@ function WalletDashboard({
                   type="number"
                   id="classicAmount"
                   value={classicAmount}
-                  onChange={(e) => setClassicAmount(e.target.value)}
+                  onChange={(e) => { setClassicAmount(e.target.value); setClassicSendError(''); }}
                   placeholder="0.00"
                   step="0.0000001"
                   min="0.0000001"
@@ -561,8 +612,12 @@ function WalletDashboard({
                 <small>available: {classicBalance} xlm</small>
               </div>
 
+              {classicSendError && (
+                <p className="error">{classicSendError}</p>
+              )}
+
               <p>
-                <a href="#" onClick={(e) => { e.preventDefault(); setShowClassicSend(false); }}>cancel</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); setShowClassicSend(false); setClassicSendError(''); }}>cancel</a>
                 {' | '}
                 <a href="#" onClick={(e) => { e.preventDefault(); handleClassicSend(e); }}>
                   {classicSending ? 'sending...' : 'send'}
@@ -587,7 +642,7 @@ function WalletDashboard({
                   type="text"
                   id="destination"
                   value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
+                  onChange={(e) => { setDestination(e.target.value); setSendError(''); }}
                   placeholder="GXXX..."
                   required
                   disabled={sending}
@@ -612,7 +667,7 @@ function WalletDashboard({
                   type="number"
                   id="amount"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => { setAmount(e.target.value); setSendError(''); }}
                   placeholder="0.00"
                   step="0.0000001"
                   min="0.0000001"
@@ -623,8 +678,12 @@ function WalletDashboard({
                 <small>available: {balance} xlm</small>
               </div>
 
+              {sendError && (
+                <p className="error">{sendError}</p>
+              )}
+
               <p>
-                <a href="#" onClick={(e) => { e.preventDefault(); setShowSend(false); }}>cancel</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); setShowSend(false); setSendError(''); }}>cancel</a>
                 {' | '}
                 <a href="#" onClick={(e) => { e.preventDefault(); handleSend(e); }}>
                   {sending ? 'sending...' : 'send'}
