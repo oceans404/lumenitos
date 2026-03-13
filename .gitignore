@@ -43,3 +43,6 @@ next-env.d.ts
 # rust build artifacts (but keep compiled WASM in out/)
 **/target/
 !contracts/**/out/
+
+# soroban test snapshots (auto-generated, ~1.7MB)
+**/test_snapshots/

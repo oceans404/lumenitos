@@ -104,8 +104,12 @@ async function deployFactory(simpleAccountWasmHash) {
   // Create a salt from the admin's public key for deterministic deployment
   const salt = StellarSdk.hash(Buffer.from(adminKeypair.publicKey()));
 
-  // Deploy with constructor args: simple_account WASM hash
+  // Deploy with constructor args: (wasm_hash: BytesN<32>, owner: Address, owner_key: BytesN<32>)
   const wasmHashScVal = StellarSdk.xdr.ScVal.scvBytes(Buffer.from(simpleAccountWasmHash, 'hex'));
+  const ownerScVal = new StellarSdk.Address(adminKeypair.publicKey()).toScVal();
+  const ownerKeyScVal = StellarSdk.xdr.ScVal.scvBytes(
+    StellarSdk.StrKey.decodeEd25519PublicKey(adminKeypair.publicKey())
+  );
 
   // Use invokeHostFunction with createContractV2 for constructor support
   const createContractArgs = new StellarSdk.xdr.CreateContractArgsV2({
@@ -116,7 +120,7 @@ async function deployFactory(simpleAccountWasmHash) {
       })
     ),
     executable: StellarSdk.xdr.ContractExecutable.contractExecutableWasm(Buffer.from(factoryWasmHash, 'hex')),
-    constructorArgs: [wasmHashScVal],
+    constructorArgs: [wasmHashScVal, ownerScVal, ownerKeyScVal],
   });
 
   const deployOp = StellarSdk.Operation.invokeHostFunction({

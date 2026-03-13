@@ -1,5 +1,30 @@
 # Lumenitos
 
+> **This repo is a fork of [tomerweller/lumenitos](https://github.com/tomerweller/lumenitos)**, a minimalist Stellar smart wallet. The original wallet and scan features are documented below.
+>
+> **Active development** on my fork here is focused on the **Agent Wallet System** — autonomous Soroban smart wallets with owner-defined policies, invite-based onboarding, and fee-sponsored transactions via a self-hosted OZ Relayer.
+>
+> **Start here:**
+> - **[AgentFlow.md](AgentFlow.md)** — Design document: architecture, security model, policy system, onboarding flow
+> - **[AgentFlowStatus.md](AgentFlowStatus.md)** — Current status, what's built, what's next
+> - **[docs/how-it-works.md](docs/how-it-works.md)** — How it all works: transaction flow, setup tutorial, troubleshooting
+>
+> **Check out experimental implementation on Testnet** — deployed and verified with real `__check_auth` ed25519 verification and fee sponsorship via OZ Relayer:
+>
+> | Step | Transaction |
+> |------|------------|
+> | Owner creates invite for agent | [`d39e8cb3...`](https://stellar.expert/explorer/testnet/tx/d39e8cb3fb055a7cccf537282b77ef829eba1d02bfde03b6a3e70d5f2333d740) |
+> | Agent onboards via relayer | [`014e5401...`](https://stellar.expert/explorer/testnet/tx/014e54012b241601dfb7ef92a2bba7d35bd436a9e9e407473f93fd5444d92b88) |
+> | Agent transfers 5 XLM via relayer | [`993eb520...`](https://stellar.expert/explorer/testnet/tx/993eb5209511c746a10e44e29afec26927ce3b98b6518517d9eda2c86fd0a2be) |
+>
+> | Account | Explorer |
+> |---------|----------|
+> | Factory contract | [`CBBOC65D...`](https://stellar.expert/explorer/testnet/contract/CBBOC65D5RRPYJWRULZCRR6OTPSZ4IV6MPPB2PHWOHIMHTSWRRC2IPJR) |
+> | Agent contract | [`CBJS5QGO...`](https://stellar.expert/explorer/testnet/contract/CBJS5QGOHVSEQU6X6CVALHVRLBR36T5BQGHKWP6ELGOKOXTPGPZPM53D) |
+> | Owner | [`GA3MN25S...`](https://stellar.expert/explorer/testnet/account/GA3MN25S4J3F4FTYA64354XOOL4HAB3ENOOSRPRECYXIMI4KMZC6OIWT) |
+
+---
+
 A minimalist Stellar smart wallet and token explorer built with Next.js and Soroban.
 
 **Live Demo:**

@@ -701,6 +701,110 @@ const ops = formatOperations(decodedEnvelope);
 All 26 Stellar operations are documented at:
 https://developers.stellar.org/docs/learn/fundamentals/transactions/list-of-operations
 
+## Challenge 14: OpenZeppelin Channels Sunset and Relay Mode
+
+### The Problem
+
+OpenZeppelin Defender stopped accepting new sign-ups on June 30, 2025 and will fully shut down on **July 1, 2026**. The `GaslessSubmitter` and `@openzeppelin/relayer-plugin-channels` dependency are effectively dead.
+
+### Investigation
+
+The gasless flow worked as follows:
+1. Agent signs auth entries with ed25519
+2. SDK extracts the host function + signed auth
+3. OZ Channels relay wraps it in a funded transaction, pays fees, submits
+
+But since no new accounts can be created, and the service will be gone in months, we needed an alternative.
+
+### The Solution: Relay Mode
+
+Looking at the E2E test results, the answer was already in front of us: **the owner already acts as the transaction source**. In every agent operation, the owner's keypair pays fees and signs the envelope, while the agent only signs auth entries through `__check_auth`.
+
+We formalized this into a `relay` config option in the SDK:
+
+```typescript
+// DirectSubmitter now accepts an optional sourceKeypair
+const submitter = new DirectSubmitter(agentSigner, rpc, networkConfig, {
+  sourceKeypair: ownerKeypair,  // pays fees, signs envelope
+});
+
+// AgentWallet accepts relay config
+const wallet = await AgentWallet.create({
+  network: 'testnet',
+  inviteCode: '...',
+  relay: { secret: 'SDOWNER...' },  // owner pays fees
+});
+```
+
+The architecture is identical to what OZ Channels did, but without the external service:
+- Agent signs auth entries (custom account `__check_auth`)
+- Relay account builds, pays for, and submits the transaction
+- The agent's Stellar account (G...) never needs to exist
+
+### Key Lessons
+
+1. **Don't depend on hosted services for core functionality** — The gasless relay was always just "someone else submits the transaction for you." You can do this yourself with a funded Stellar account.
+2. **The owner-as-relay pattern is simpler and more reliable** — No API keys, no external service, no rate limits. Just a funded account.
+3. **For multi-agent deployments**, a simple relay server (~50 lines of Express) can replace OZ Channels entirely. The relay receives signed auth entries from agents and wraps them in funded transactions.
+
+## Challenge 15: Phase 3 Testnet Deployment Findings
+
+### The Problems
+
+During the first real testnet deployment and E2E test run, three issues surfaced that weren't caught by unit tests (all of which use `mock_all_auths`).
+
+### Finding 1: `getTransaction().returnValue` vs `resultMetaXdr.v3()`
+
+**Problem:** After successfully submitting transactions, the result parsing code tried to extract return values via:
+```javascript
+response.resultMetaXdr?.v3()?.sorobanMeta()?.returnValue()
+```
+This failed with `"v3 not set"` — the `TransactionMeta` discriminant wasn't always v3.
+
+**Fix:** In Stellar SDK v14, `getTransaction()` returns a `returnValue` property directly on successful responses. No need to parse the metadata XDR:
+```javascript
+// Before (broken)
+returnValue: response.resultMetaXdr?.v3()?.sorobanMeta()?.returnValue()
+
+// After (works)
+returnValue: response.returnValue
+```
+
+### Finding 2: XLM SAC Transfers Require Destination Account to Exist
+
+**Problem:** Agent transfer tests failed with `"account entry is missing"` when sending XLM to a random G... address. The XLM Stellar Asset Contract (SAC) requires the destination account to exist on-chain — unlike classic Stellar payments which can create accounts via `create_account`.
+
+**Fix:** Fund the destination via friendbot before transferring, or send to an existing account. This is important for agent developers: if your agent sends XLM via `agent_transfer`, the destination must already be a funded Stellar account (or a contract address).
+
+### Finding 3: Contract Address Extraction from Deploy Metadata
+
+**Problem:** After deploying the factory contract, extracting the contract address from transaction metadata failed:
+```
+Error: The first argument must be of type string or an instance of Buffer...
+Received an instance of ChildUnion
+```
+
+The `contract.contractId()` accessor on XDR `ScAddress` returns an XDR wrapper type (`ChildUnion`), not a raw Buffer.
+
+**Fix:** Use `Address.fromScVal(response.returnValue)` from the transaction's return value (simpler and more reliable), with a fallback that handles the XDR type:
+```javascript
+// Primary: use returnValue directly
+const addr = StellarSdk.Address.fromScVal(result.returnValue);
+const contractId = addr.toString();
+
+// Fallback: convert XDR wrapper to Buffer
+const contractIdRaw = contract.contractId();
+const buf = Buffer.isBuffer(contractIdRaw) ? contractIdRaw : Buffer.from(contractIdRaw);
+return StellarSdk.StrKey.encodeContract(buf);
+```
+
+### Key Lessons
+
+1. **Always test on testnet** — `mock_all_auths` hides real-world issues with transaction result parsing, account existence, and XDR type handling
+2. **Use `response.returnValue`** — Don't parse `resultMetaXdr` manually; the SDK extracts it for you
+3. **XLM SAC ≠ classic payments** — SAC `transfer` requires existing destination accounts; this affects agent transfer UX
+4. **XDR wrappers aren't Buffers** — Always handle the possibility that XDR accessors return wrapper types
+
 ## Conclusion
 
 Implementing a custom contract account in Stellar requires deep understanding of:
